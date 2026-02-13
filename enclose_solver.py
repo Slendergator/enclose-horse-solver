@@ -22,10 +22,12 @@ GRASS = "."
 WATER = "~"
 HORSE = "H"
 CHERRY = "C"
+APPLE = "a"
+BEE = "e"
 PORTAL_A = "P"
 PORTAL_B = "Q"
 
-CELL_CYCLE = [GRASS, WATER, HORSE, CHERRY, PORTAL_A, PORTAL_B]
+CELL_CYCLE = [GRASS, WATER, HORSE, CHERRY, APPLE, BEE, PORTAL_A, PORTAL_B]
 
 NEIGHBORS_4 = [(1, 0), (-1, 0), (0, 1), (0, -1)]
 
@@ -79,6 +81,8 @@ def solve_enclose(
     grid_water: list[list[bool]],
     horse_pos: tuple[int, int],
     is_cherry: list[list[bool]],
+    is_apple: list[list[bool]],
+    is_bee: list[list[bool]],
     portal_pairs: list[list[tuple[int, int]]],
     wall_budget: int,
     time_limit_s: float = 60.0,
@@ -111,13 +115,15 @@ def solve_enclose(
         for j in range(N):
             water = grid_water[i][j]
             cherry = is_cherry[i][j]
+            apple = is_apple[i][j]
+            bee = is_bee[i][j]
             r[i, j] = model.NewBoolVar(f"r_{i}_{j}")
             if water:
                 w[i, j] = model.NewConstant(0)
                 passable[i, j] = model.NewConstant(0)
                 model.Add(r[i, j] == 0)
                 continue
-            if (i, j) == (hi, hj) or cherry:
+            if (i, j) == (hi, hj) or cherry or apple or bee:
                 w[i, j] = model.NewConstant(0)
             else:
                 w[i, j] = model.NewBoolVar(f"w_{i}_{j}")
@@ -187,8 +193,14 @@ def solve_enclose(
         for j in range(N):
             if grid_water[i][j]:
                 weights[i, j] = 0
+            elif is_cherry[i][j]:
+                weights[i, j] = 3
+            elif is_apple[i][j]:
+                weights[i, j] = 10
+            elif is_bee[i][j]:
+                weights[i, j] = -5
             else:
-                weights[i, j] = 4 if is_cherry[i][j] else 1
+                weights[i, j] = 1
     model.Maximize(
         sum(weights[i, j] * r[i, j] for i in range(M) for j in range(N))
     )
@@ -212,6 +224,8 @@ def solve_enclose(
             if (
                 not grid_water[i][j]
                 and not is_cherry[i][j]
+                and not is_apple[i][j]
+                and not is_bee[i][j]
                 and (i, j) != (hi, hj)
                 and solver.Value(w[i, j]) == 1
             ):
@@ -227,17 +241,21 @@ def parse_editor_state(
     list[list[bool]],
     tuple[int, int] | None,
     list[list[bool]],
+    list[list[bool]],
+    list[list[bool]],
     list[list[tuple[int, int]]],
 ]:
     """
     Convert editor grid and budget to solver inputs.
-    Returns (grid_water, horse_pos, is_cherry, portal_pairs).
+    Returns (grid_water, horse_pos, is_cherry, is_apple, is_bee, portal_pairs).
     portal_pairs is a list of [portal_a_cells, portal_b_cells] for each pair.
     """
     M = len(grid_cells)
     N = len(grid_cells[0]) if grid_cells else 0
     grid_water = [[False] * N for _ in range(M)]
     is_cherry = [[False] * N for _ in range(M)]
+    is_apple = [[False] * N for _ in range(M)]
+    is_bee = [[False] * N for _ in range(M)]
     horse_pos: tuple[int, int] | None = None
     portal_a_cells: list[tuple[int, int]] = []
     portal_b_cells: list[tuple[int, int]] = []
@@ -251,6 +269,10 @@ def parse_editor_state(
                 horse_pos = (i, j)
             elif ch == CHERRY:
                 is_cherry[i][j] = True
+            elif ch == APPLE:
+                is_apple[i][j] = True
+            elif ch == BEE:
+                is_bee[i][j] = True
             elif ch == PORTAL_A:
                 portal_a_cells.append((i, j))
             elif ch == PORTAL_B:
@@ -262,7 +284,7 @@ def parse_editor_state(
     else:
         portal_pairs = []
 
-    return grid_water, horse_pos, is_cherry, portal_pairs
+    return grid_water, horse_pos, is_cherry, is_apple, is_bee, portal_pairs
 
 
 # --- GUI ---
@@ -272,6 +294,8 @@ CELL_COLORS = {
     WATER: "#1976d2",
     HORSE: "#5d4037",
     CHERRY: "#c62828",
+    APPLE: "#ff8c00",
+    BEE: "#ffeb3b",
     PORTAL_A: "#7b1fa2",
     PORTAL_B: "#00838f",
 }
@@ -281,6 +305,8 @@ CELL_LABELS = {
     WATER: "~",
     HORSE: "H",
     CHERRY: "C",
+    APPLE: "a",
+    BEE: "e",
     PORTAL_A: "A",
     PORTAL_B: "B",
 }
@@ -364,7 +390,7 @@ class EditorWindow:
         ttk.Button(top, text="Clear grid", command=self._clear_grid).pack(
             side=tk.LEFT, padx=2
         )
-        self.status_label = ttk.Label(top, text="Click cells to set type: Grass → Water → Horse → Cherry → Portal A → Portal B")
+        self.status_label = ttk.Label(top, text="Click cells to set type: Grass → Water → Horse → Cherry → Apple → Bee → Portal A → Portal B")
         self.status_label.pack(side=tk.LEFT, padx=8)
 
         # Scrollable grid
@@ -470,7 +496,7 @@ class EditorWindow:
             messagebox.showerror("Error", "Wall budget must be >= 0.", parent=self.win)
             return
 
-        grid_water, horse_pos, is_cherry, portal_pairs = parse_editor_state(
+        grid_water, horse_pos, is_cherry, is_apple, is_bee, portal_pairs = parse_editor_state(
             self.cell_type, budget
         )
         if horse_pos is None:
@@ -491,7 +517,7 @@ class EditorWindow:
 
         def run() -> None:
             status_name, score, walls, reachable = solve_enclose(
-                grid_water, horse_pos, is_cherry, portal_pairs, budget, time_limit_s=60.0
+                grid_water, horse_pos, is_cherry, is_apple, is_bee, portal_pairs, budget, time_limit_s=60.0
             )
             self.result_queue.put((status_name, score, walls, reachable))
 
