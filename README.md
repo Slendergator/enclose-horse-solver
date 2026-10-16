@@ -14,6 +14,7 @@ You place a limited number of walls to trap the horse in the biggest pen you can
 
 ## Features
 
+- **Load levels from the site**: paste an enclose.horse link, level id or date and the map and wall count are filled in for you
 - **Puzzle editor** with paint and erase, drag to fill, undo and redo, and grid sizes from 3×3 to 60×60
 - **Optimal solver** that maximizes the score and, among equally good answers, uses the fewest walls
 - **Live progress** that draws the best layout found so far while the solver runs
@@ -24,7 +25,7 @@ You place a limited number of walls to trap the horse in the biggest pen you can
 
 ## Requirements
 
-- Python 3.8 or newer, with tkinter (included with the python.org installers for Windows and macOS)
+- Python 3.10 or newer, with tkinter (included with the python.org installers for Windows and macOS)
 - OR-Tools 9.8 or newer
 
 ```bash
@@ -37,7 +38,9 @@ pip install ortools
 python enclose_horse_solver.py
 ```
 
-1. Set the grid size and click **New grid**, or paste a map (see below).
+1. Click **Load from enclose.horse...** and press OK to load today's daily puzzle, or paste a level link (`https://enclose.horse/play/WldoiK`), a level id (`WldoiK`) or a date (`2026-10-16`). The map and **Walls allowed** are filled in, so skip to step 4.
+
+   To enter a puzzle by hand instead, set the grid size and click **New grid**, or paste a map (see below).
 2. Paint the water, then place the horse, items and portals.
 3. Set **Walls allowed** to the number of walls the level gives you.
 4. Press **Solve** or `F5`. The walls in the answer are drawn in gray, and the pen is shaded in hay yellow.
@@ -85,6 +88,12 @@ For example, this 7×7 map with 1 wall allowed solves to a score of 13: one wall
 ```
 
 **Save puzzle** writes a JSON file containing the map text and the wall count.
+
+### Loading from enclose.horse
+
+Every level page on enclose.horse includes the level in its HTML as `window.__LEVEL__`, with the map in the same text format shown above and the level's wall count. **Load from enclose.horse** downloads the page and reads that data, so no account or API key is needed.
+
+Bonus-round levels can contain a unicorn, gate or pad. Those follow extra rules this solver doesn't model, so they load as grass and a warning is shown. The solver's answer won't match the game on those levels.
 
 ## How it works
 
